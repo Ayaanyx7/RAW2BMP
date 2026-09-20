@@ -19,12 +19,13 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # FIX: Added /p:PlatformToolset=v143 to force compilation on modern servers
       - name: Compile RAW2BMP Tool
         shell: cmd
         run: |
           msbuild RAW2BMP.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143
-          copy RAW2BMP\Release\RAW2BMP.exe .\raw2bmp.exe
+          
+          # FIX: Automatically find RAW2BMP.exe wherever it was compiled and copy it to the root
+          for /r %%i in (RAW2BMP.exe) do copy "%%i" .\raw2bmp.exe
         
       - name: Convert BMP files to RAW
         shell: cmd
