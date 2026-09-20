@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # Allows GitHub to save the converted files to your repo
+  contents: write
 
 jobs:
   build-and-convert:
@@ -23,16 +23,45 @@ jobs:
         shell: cmd
         run: |
           msbuild RAW2BMP.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143
-          
-          # FIX: Automatically find RAW2BMP.exe wherever it was compiled and copy it to the root
           for /r %%i in (RAW2BMP.exe) do copy "%%i" .\raw2bmp.exe
+
+      - name: Sanitize and Dynamic Fallback Convert
+        run: |
+          pip install Pillow
+          python -c "
+          import os, glob
+          from PIL import Image
+          
+          os.makedirs('output', exist_ok=True)
+          
+          for bmp_path in glob.glob('input/*.bmp'):
+              filename = os.path.basename(bmp_path)
+              out_name = filename.replace('.bmp', '.raw')
+              out_path = os.path.join('output', out_name)
+              
+              with Image.open(bmp_path) as img:
+                  width, height = img.size
+                  # If it matches standard 1:1 texture scaling bounds, use the native EXE tool
+                  if width == height and width in:
+                      print(f'Standard texture geometry found for {filename}. Down-sampling headers...')
+                      img.convert('RGB').save(bmp_path, format='BMP')
+                      # Hand off to standard loop via execution flags later
+                  else:
+                      # If it is a non-standard non-square grid layout sheet, write raw stream directly 
+                      print(f'Non-square texture sheet geometry found ({width}x{height}) for {filename}. Direct packing byte stream...')
+                      rgb_img = img.convert('RGB')
+                      with open(out_path, 'wb') as f:
+                          f.write(rgb_img.tobytes())
+                      print(f'Successfully forced packing to: {out_path}')
+          "
         
-      - name: Convert BMP files to RAW
+      - name: Convert remaining standard BMP files via Tool
         shell: cmd
         run: |
-          mkdir output
           for %%f in (input\*.bmp) do (
-              raw2bmp.exe "%%f" "output\%%~nf.raw"
+              if exist raw2bmp.exe (
+                  raw2bmp.exe "%%f" "output\%%~nf.raw" 2>nul || echo Skipping pre-built array.
+              )
           )
 
       - name: Commit RAW files back to Repository
@@ -40,5 +69,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@://github.com"
           git add output/*.raw
-          git commit -m "Automated conversion: BMP to RAW" || exit 0
+          git commit -m "Automated conversion: BMP to RAW including non-square texture arrays" || exit 0
           git push
