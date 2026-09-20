@@ -1,0 +1,41 @@
+name: Compile RAW2BMP and Convert
+
+on:
+  push:
+    paths:
+      - 'input/*.bmp'
+  workflow_dispatch:
+
+permissions:
+  contents: write # Allows GitHub to save the converted files to your repo
+
+jobs:
+  build-and-convert:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Compile RAW2BMP Tool
+        run: |
+          # The source code is in C++. Windows runners have MSBuild ready.
+          msbuild RAW2BMP.sln /p:Configuration=Release /p:Platform=Win32
+          
+          # Find where the compiled exe landed
+          copy Release\RAW2BMP.exe .\raw2bmp.exe
+        
+      - name: Convert BMP files to RAW
+        shell: cmd
+        run: |
+          mkdir output
+          for %%f in (input\*.bmp) do (
+              raw2bmp.exe "%%f" "output\%%~nf.raw"
+          )
+
+      - name: Commit RAW files back to Repository
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/*.raw
+          git commit -m "Automated conversion: BMP to RAW" || exit 0
+          git push
