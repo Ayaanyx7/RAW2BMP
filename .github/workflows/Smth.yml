@@ -16,12 +16,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # FIX: This official Microsoft action loads MSBuild into the environment path
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # FIX: Forcing cmd shell ensures system-level file copies behave exactly as expected
       - name: Compile RAW2BMP Tool
+        shell: cmd
         run: |
-          # The source code is in C++. Windows runners have MSBuild ready.
           msbuild RAW2BMP.sln /p:Configuration=Release /p:Platform=Win32
-          
-          # Find where the compiled exe landed
           copy Release\RAW2BMP.exe .\raw2bmp.exe
         
       - name: Convert BMP files to RAW
